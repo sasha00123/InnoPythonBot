@@ -4,6 +4,7 @@ from telegram.ext import *
 
 # Enable logging
 import config
+from models import Note
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -46,10 +47,9 @@ def set_text(update, context):
     text = update.message.text
 
     # Если заметок не было ещё, создать ключ notes
-    notes = context.user_data.setdefault('notes', {})
-    notes[title] = text
+    Note.create(title=title, text=text)
 
-    update.message.reply_text("Заметка успешно создана!")
+    update.message.reply_text(f"Заметка успешно создана!")
 
     return ConversationHandler.END
 
@@ -60,11 +60,9 @@ def cancel(update, context):
 
 
 def get_notes(update, context):
-    notes = context.user_data.get('notes', {})
-
     response = ""
-    for pos, (title, text) in enumerate(notes.items(), start=1):
-        response += f"{pos}. {title}: {text}\n"
+    for pos, note in enumerate(Note.select(), start=1):
+        response += f"{pos}. {note.title}: {note.text}\n"
 
     update.message.reply_text(response or "Заметок пока что нет!")
 
@@ -87,11 +85,14 @@ def read(update, context):
     title = update.message.text
 
     # Находим такую заметку
-    notes = context.user_data.get('notes', {})
-    text = notes.get(title, None)
+    note = Note.get_or_none(title=title)
+
+    if note is None:
+        update.message.reply_text('Такой заметки не существует!')
+        return
 
     # Возвращаем текст заметки или сообщаем, что её не существет
-    update.message.reply_text(text or 'Такой заметки не существует!')
+    update.message.reply_text(note.text)
 
     # Выходим из диалога
     return ConversationHandler.END
@@ -102,16 +103,17 @@ def remove(update, context):
     title = update.message.text
 
     # Находим такую заметку
-    notes = context.user_data.get('notes', {})
-    text = notes.get(title, None)
+
+    # Находим такую заметку
+    note = Note.get_or_none(title=title)
 
     # Если не нашлось - сообщаем об этом
-    if text is None:
+    if note is None:
         update.message.reply_text("Такой заметки не существует!")
         return
 
     # Удаляем
-    del notes[title]
+    note.delete_instance()
     update.message.reply_text("Удалено успешно!")
 
     # Выходим из диалога
